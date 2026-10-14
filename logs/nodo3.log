@@ -1,0 +1,14 @@
+[nodo3] arranca | salida=(3, 1) meta=(27, 27) | hormigas=10 α=1.0 β=2.0 ρ=0.20
+[nodo3] orden 'go' recibida, inicia ACO
+[nodo3] it=  1  mejor_iter= 87  mejor= 87 celdas  éxito=10/10
+[nodo3] it= 10  mejor_iter= 71  mejor= 63 celdas  éxito=10/10
+[nodo3] it= 20  mejor_iter= 59  mejor= 59 celdas  éxito=10/10
+[nodo3] it= 30  mejor_iter= 55  mejor= 55 celdas  éxito=10/10
+[nodo3] it= 40  mejor_iter= 55  mejor= 55 celdas  éxito=10/10
+[nodo3] it= 50  mejor_iter= 55  mejor= 55 celdas  éxito=10/10
+[nodo3] it= 60  mejor_iter= 55  mejor= 55 celdas  éxito=10/10
+[nodo3] it= 70  mejor_iter= 55  mejor= 55 celdas  éxito=10/10
+[nodo3] it= 80  mejor_iter= 55  mejor= 55 celdas  éxito=10/10
+[nodo3] convergió en it=80 (sin mejora en 50 iteraciones)
+[nodo3] ruta final: 55 celdas (54 pasos) | 80 iteraciones | 9.5 s
+[nodo3] ruta confirmada por el gemelo digital

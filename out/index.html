@@ -1,0 +1,9 @@
+<!doctype html><meta charset=utf-8><title>Gemelo digital ACO</title>
+<style>body{font-family:system-ui;background:#111;color:#eee;text-align:center;margin:1rem}
+img{max-width:92vmin;border:2px solid #444;image-rendering:auto}a{color:#8cf}</style>
+<h2>Enjambre de 3 carritos · ACO en ESP32 · gemelo digital PyBullet</h2>
+<img id=f src=latest.png><pre id=s></pre>
+<p><a href=simulation.gif>simulation.gif</a> · <a href=results.json>results.json</a> ·
+<a href=convergence.png>convergence.png</a> · <a href=convergence.csv>convergence.csv</a></p>
+<script>setInterval(()=>{f.src='latest.png?'+Date.now();
+fetch('status.json?'+Date.now()).then(r=>r.json()).then(j=>s.textContent=JSON.stringify(j,null,1))},700)</script>

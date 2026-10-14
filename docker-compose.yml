@@ -1,0 +1,75 @@
+name: aco-swarm
+
+# Red 192.168.4.0/24: la misma que crea un ESP32 en modo SoftAP (el AP es 192.168.4.1)
+networks:
+  esp_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.4.0/24
+          gateway: 192.168.4.254   # la .1 queda libre para el AP simulado
+
+# Parámetros comunes (se pueden sobreescribir con un archivo .env)
+x-maze: &maze
+  MAZE_CELLS_W: ${MAZE_CELLS_W:-14}
+  MAZE_CELLS_H: ${MAZE_CELLS_H:-14}
+  MAZE_SEED: ${MAZE_SEED:-7}
+  MAZE_BRAID: ${MAZE_BRAID:-0.20}
+  AP_HOST: 192.168.4.1
+  AP_PORT: "5000"
+
+x-node: &node
+  build:
+    context: .
+    dockerfile: node/Dockerfile
+  depends_on: [ap]
+  restart: "no"
+
+services:
+  # --- Parte de red: ESP32 en modo AP (relé UDP con pérdida y latencia) -------
+  ap:
+    build:
+      context: .
+      dockerfile: ap/Dockerfile
+    environment:
+      AP_PORT: "5000"
+      AP_LOSS: ${AP_LOSS:-0.02}
+      AP_LATENCY_MS: ${AP_LATENCY_MS:-15}
+      AP_JITTER_MS: ${AP_JITTER_MS:-10}
+    networks:
+      esp_net: { ipv4_address: 192.168.4.1 }
+
+  # --- Mundo físico: 3 nodos ESP32 (carritos) corriendo ACO -------------------
+  esp32_1:
+    <<: *node
+    environment: { <<: *maze, NODE_ID: "1", SEED: "${SEED:-1000}" }
+    networks:
+      esp_net: { ipv4_address: 192.168.4.2 }
+  esp32_2:
+    <<: *node
+    environment: { <<: *maze, NODE_ID: "2", SEED: "${SEED:-1000}" }
+    networks:
+      esp_net: { ipv4_address: 192.168.4.3 }
+  esp32_3:
+    <<: *node
+    environment: { <<: *maze, NODE_ID: "3", SEED: "${SEED:-1000}" }
+    networks:
+      esp_net: { ipv4_address: 192.168.4.4 }
+
+  # --- Parte virtual: gemelo digital PyBullet + visor web ---------------------
+  twin:
+    build:
+      context: .
+      dockerfile: twin/Dockerfile
+    depends_on: [ap]
+    environment:
+      <<: *maze
+      OUT_DIR: /out
+      HTTP_PORT: "8080"
+      EXIT_WHEN_DONE: "0"
+    volumes:
+      - ./out:/out
+    ports:
+      - "8080:8080"
+    networks:
+      esp_net: { ipv4_address: 192.168.4.10 }

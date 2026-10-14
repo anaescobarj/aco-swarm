@@ -1,0 +1,7 @@
+[AP] SSID=ESP32-ACO escuchando en UDP/5000  loss=2%  lat=15±10 ms
+[AP] estación asociada: nodo1 (127.0.0.1:40865)  total=1
+[AP] estación asociada: nodo2 (127.0.0.1:60078)  total=2
+[AP] estación asociada: nodo3 (127.0.0.1:51145)  total=3
+[AP] estación asociada: gemelo (127.0.0.1:46592)  total=4
+[AP] rx=90 fwd=254 perdidos=7 estaciones=4
+[AP] rx=220 fwd=635 perdidos=13 estaciones=4

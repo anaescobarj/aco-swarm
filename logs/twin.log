@@ -1,0 +1,12 @@
+pybullet build time: Jan 29 2025 23:17:20
+[gemelo] visor web en http://localhost:8080
+[gemelo] laberinto 29x29 | meta=(27, 27) | rutas óptimas (BFS, referencia del informe): {1: 57, 2: 55, 3: 55}
+[gemelo] 3 nodos asociados -> orden 'go'
+[gemelo] ruta recibida del nodo 3: 55 celdas (óptima 55)
+[gemelo] ruta recibida del nodo 1: 57 celdas (óptima 57)
+[gemelo] ruta recibida del nodo 2: 55 celdas (óptima 55)
+[gemelo] simulación física: 3 robots virtuales en marcha
+[gemelo] TERMINADO | resultados en /home/claude/aco-swarm/out
+[gemelo]   robot 1: ruta 57 celdas (óptimo 57) | llegó a t=24.91 s
+[gemelo]   robot 2: ruta 55 celdas (óptimo 55) | llegó a t=24.08 s
+[gemelo]   robot 3: ruta 55 celdas (óptimo 55) | llegó a t=24.16 s
