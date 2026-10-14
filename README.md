@@ -52,3 +52,4 @@ ACO es estocástico: en otras corridas una ruta puede quedar 1–2 celdas por en
 docker-compose.yml   ap/  node/  twin/  common/ (maze.py, net.py)
 run_local.sh         out/ (resultados de ejemplo)   logs/
 ```
+![Simulación del enjambre](out/simulation.gif)
