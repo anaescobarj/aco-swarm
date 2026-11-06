@@ -1,0 +1,6 @@
+streamlit>=1.40
+plotly>=5.20
+requests>=2.31
+SpeechRecognition>=3.10
+anthropic>=2.0
+pytest>=8.0

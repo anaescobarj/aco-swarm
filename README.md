@@ -1,3 +1,5 @@
+> **Proyecto Final – Robot móvil ESP32 (Primer Entregable):** ver [`robot-esp32/`](robot-esp32/README.md) e [informe PDF](robot-esp32/docs/Informe_Primer_Entregable.pdf).
+
 # Enjambre de 3 carritos con ACO en ESP32 y gemelo digital en PyBullet (Docker)
 
 Simulación completa de la arquitectura de la actividad:
