@@ -17,7 +17,7 @@
 #define PIN_AIN1   26
 #define PIN_AIN2   27
 #define PIN_PWMB   14   // canal B = lado derecho
-#define PIN_BIN1   33
+#define PIN_BIN1   16   // movido desde GPIO33 para liberar un ADC1 al termistor
 #define PIN_BIN2   32
 #define PIN_STBY   13
 #define MOTOR_PWM_FREQ   20000   // 20 kHz: fuera del rango audible
@@ -53,6 +53,18 @@
 #define PIN_VBAT   36           // divisor 100k / 33k
 #define VBAT_RATIO ((100.0f + 33.0f) / 33.0f)
 #define PIN_LED    2
+
+// ---------------- Termistor NTC (temperatura del paquete de baterías) --
+// Divisor: 3.3 V -- R_FIJA 10k -- nodo(GPIO33) -- NTC 10k B3950 -- GND
+// GPIO33 es ADC1: el ADC2 no se puede leer con el Wi-Fi activo.
+#define PIN_NTC          33
+#define NTC_R_FIXED      10000.0f
+#define NTC_R25          10000.0f
+#define NTC_BETA         3950.0f
+#define NTC_VCC_MV       3300.0f
+#define TEMP_WARN_C      45.0f    // aviso a la app / J.A.R.V.I.S.
+#define TEMP_CUTOFF_C    55.0f    // detiene motores y bloquea el modo autónomo
+#define TEMP_HYST_C      5.0f     // histéresis para rearmar
 
 // ---------------- Control ---------------------------------------------
 #define LOOP_PERIOD_MS      50     // lazo de control a 20 Hz

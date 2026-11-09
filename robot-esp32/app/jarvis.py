@@ -24,6 +24,8 @@ Proyecto: robot móvil autónomo basado en ESP32 (diseño mecánico y electróni
   por dónde esquivar.
 - 3 sensores infrarrojos TCRT5000 para seguir la línea guía central de la pista
   (en la sección negra la polaridad se invierte usando el sensor de color).
+- Termistor NTC 10k B3950 (GPIO33, divisor con 10k) pegado al portapilas: aviso a 45 °C y a 55 °C detiene los
+  motores y bloquea el modo autónomo hasta bajar de 40 °C.
 - Energía: 2 celdas 18650 en serie (7.4 V) + BMS 2S, regulador step-down a 5 V para lógica, servo y sensores.
 - Comunicación: Wi-Fi SoftAP (red ROBOT-ESP32, http://192.168.4.1) con API REST/JSON para la app Streamlit;
   ESP-NOW para el control remoto propio (otro ESP32 con joystick).
@@ -33,7 +35,7 @@ Proyecto: robot móvil autónomo basado en ESP32 (diseño mecánico y electróni
 - Meta final: 3 niveles de pista (4 obstáculos/3 colores, 6/4, 8/6).
 Variables de telemetría (/api/state): heading (rumbo actual, °), heading_des (dirección deseada, °),
 heading_err, dist_cm (distancia al obstáculo), obstacle, color, rgbc, color_changes, line [izq,centro,der],
-pwm_l / pwm_r (-1..1), batt_v, mode, nav (linea|rumbo), state (estado de la máquina autónoma),
+pwm_l / pwm_r (-1..1), batt_v, temp_c (temperatura de baterías, °C), temp_alarm (0 normal, 1 aviso, 2 corte), mode, nav (linea|rumbo), state (estado de la máquina autónoma),
 obstacles_avoided, event (último evento), cmd_src (origen del último comando).
 """
 
@@ -44,7 +46,8 @@ Tu trabajo:
 1. Explicar el proyecto (arquitectura, módulos, materiales, decisiones de diseño) a profesores y compañeros.
 2. Interpretar la telemetría en tiempo real que llega en cada mensaje dentro de <telemetria>: cita valores \
 concretos con unidades y explica qué significan (por ejemplo, si el error de rumbo es grande, si hay un obstáculo \
-cerca, en qué sección de color está, si la batería está baja: < 7.0 V).
+cerca, en qué sección de color está, si la batería está baja: < 7.0 V, si la temperatura de las baterías \
+supera 45 °C).
 3. Si te piden mover el robot, explica que los comandos se dan con los botones o por voz en la pestaña \
 de control; no inventes que lo moviste.
 
@@ -116,6 +119,10 @@ def ask_local(question: str, state: dict | None) -> str:
     if "color" in q or "seccion" in q:
         parts.append(f"Estoy sobre la sección {s['color']} (RGBC {s['rgbc']}); llevo {s['color_changes']} "
                      "cambios de sección.")
+    if any(w in q for w in ("temperatura", "termistor", "caliente", "calor", "temp")):
+        alarm = {0: "normal", 1: "en aviso (≥ 45 °C)", 2: "en corte por sobretemperatura (≥ 55 °C)"}
+        parts.append(f"El termistor NTC del paquete de baterías marca {s.get('temp_c', 0):.1f} °C; "
+                     f"estado térmico {alarm.get(s.get('temp_alarm', 0), 'desconocido')}.")
     if "bater" in q:
         parts.append(f"La batería está en {s['batt_v']:.2f} V" + (" — conviene recargarla." if s["batt_v"] < 7.0 else "."))
     if "modo" in q or "estado" in q:
@@ -127,5 +134,5 @@ def ask_local(question: str, state: dict | None) -> str:
     if not parts:
         parts.append(f"Resumen: modo {s['mode']}, estado {s['state']}, rumbo {s['heading']:.0f}° "
                      f"(deseado {s['heading_des']:.0f}°), obstáculo a {s['dist_cm']:.0f} cm, color {s['color']}, "
-                     f"batería {s['batt_v']:.2f} V. Último evento: {s['event']}.")
+                     f"batería {s['batt_v']:.2f} V, temperatura {s.get('temp_c', 0):.1f} °C. Último evento: {s['event']}.")
     return " ".join(parts)

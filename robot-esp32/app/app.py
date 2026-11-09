@@ -139,7 +139,7 @@ def live_dashboard():
         ss.last_event_id = s["event_id"]
         ss.events.appendleft(f"{time.strftime('%H:%M:%S')} · {s['event']}")
 
-    m = st.columns(6)
+    m = st.columns(7)
     m[0].metric("Modo", s["mode"], s["nav"] if s["mode"] == "AUTO" else None)
     m[1].metric("Rumbo actual", f"{s['heading']:.0f}°")
     m[2].metric("Dirección deseada", f"{s['heading_des']:.0f}°", f"{s['heading_err']:+.0f}° error",
@@ -149,6 +149,11 @@ def live_dashboard():
     m[4].metric("Color superficie", s["color"].capitalize(), f"{s['color_changes']} cambios", delta_color="off")
     m[5].metric("Batería", f"{s['batt_v']:.2f} V", "baja" if s["batt_v"] < 7.0 else "ok",
                 delta_color="inverse" if s["batt_v"] < 7.0 else "normal")
+    alarm = s.get("temp_alarm", 0)
+    m[6].metric("Temp. baterías", f"{s.get('temp_c', 0):.1f} °C" if s.get("temp_ok", True) else "NTC desc.",
+                ["normal", "alta", "CORTE"][alarm], delta_color="inverse" if alarm else "off")
+    if alarm == 2:
+        st.error("Sobretemperatura en el paquete de baterías: motores limitados y modo autónomo bloqueado.")
 
     c1, c2, c3 = st.columns([1.1, 1.3, 1])
     with c1:

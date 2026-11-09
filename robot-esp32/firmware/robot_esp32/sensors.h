@@ -74,3 +74,23 @@ inline void update() {
   volts = (volts == 0) ? v : 0.9f * volts + 0.1f * v;
 }
 }  // namespace Battery
+
+// Termistor NTC 10k B3950 pegado al portapilas 2S: protege las celdas 18650
+// (y el TB6612, que está al lado) contra sobrecalentamiento.
+namespace Thermistor {
+static float tempC = 25.0f;
+static bool ok = false;
+inline void begin() { analogSetPinAttenuation(PIN_NTC, ADC_11db); }
+inline void update() {
+  uint32_t mv = 0;
+  for (int i = 0; i < 4; i++) mv += analogReadMilliVolts(PIN_NTC);   // promedio de 4
+  float v = mv / 4.0f;
+  // circuito abierto (v ~ Vcc) o corto (v ~ 0) => sensor desconectado
+  ok = (v > 50.0f && v < NTC_VCC_MV - 50.0f);
+  if (!ok) return;
+  float r = NTC_R_FIXED * v / (NTC_VCC_MV - v);                       // NTC en el lado bajo
+  float invT = 1.0f / 298.15f + logf(r / NTC_R25) / NTC_BETA;         // ecuación Beta
+  float t = 1.0f / invT - 273.15f;
+  tempC = 0.8f * tempC + 0.2f * t;                                    // filtro paso-bajo
+}
+}  // namespace Thermistor

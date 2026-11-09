@@ -61,3 +61,31 @@ def test_http_api_roundtrip():
         assert c.track()["level"] == 1
     finally:
         srv.shutdown()
+
+
+def test_thermistor_overtemp_protection():
+    r = SimRobot(1)
+    assert r.state_json()["temp_c"] == 25.0
+    r.handle("/api/mode", {"m": ["auto"]})
+    r.handle("/api/sim/temp", {"c": ["47"]})
+    r.step()
+    assert r.state_json()["temp_alarm"] == 1 and r.mode == "AUTO"      # solo aviso
+    r.handle("/api/sim/temp", {"c": ["56"]})
+    r.step()
+    s = r.state_json()
+    assert s["temp_alarm"] == 2 and s["mode"] == "MANUAL"               # corte: sale de AUTO
+    code, _ = r.handle("/api/mode", {"m": ["auto"]})
+    assert code == 409                                                   # no deja volver a AUTO
+    r.handle("/api/sim/temp", {"c": ["38"]})
+    r.step()
+    assert r.state_json()["temp_alarm"] == 0
+    code, _ = r.handle("/api/mode", {"m": ["auto"]})
+    assert code == 200
+
+
+def test_temperature_rises_with_motor_load():
+    r = SimRobot(1)
+    r.handle("/api/mode", {"m": ["auto"]})
+    for _ in range(int(120 / 0.05)):
+        r.step()
+    assert 25.5 < r.temp < 45                                            # se calienta sin alarmar

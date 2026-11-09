@@ -66,7 +66,8 @@ static float distLeft = 0, distRight = 0;
 static uint32_t obstaclesAvoided = 0;
 static float lastLineErr = 0;
 static uint32_t prevLineSeen = 0;
-static uint32_t avoidEnd = 0;         // instante en que terminó la última evasión    // última vez que se vio la línea (ciclo anterior)        // memoria del lado donde se vio la línea
+static uint32_t avoidEnd = 0;
+static uint8_t tempLevel = 0;         // 0 normal, 1 aviso, 2 sobretemperatura         // instante en que terminó la última evasión    // última vez que se vio la línea (ciclo anterior)        // memoria del lado donde se vio la línea
 
 // Eventos para la app / chatbot
 static char lastEvent[96] = "Sistema iniciado";
@@ -235,13 +236,34 @@ static void autoControl(uint32_t now) {
 }
 
 // ---------------------------------------------------------------------
+//  Protección térmica (termistor NTC en el paquete de baterías)
+// ---------------------------------------------------------------------
+static void thermalProtection() {
+  if (!Thermistor::ok) return;
+  float t = Thermistor::tempC;
+  if (tempLevel < 2 && t >= TEMP_CUTOFF_C) {
+    tempLevel = 2;
+    if (mode != MODE_MANUAL) setMode(MODE_MANUAL);
+    Motors::brake();
+    logEvent("SOBRETEMPERATURA %.1f C: motores detenidos", t);
+  } else if (tempLevel == 0 && t >= TEMP_WARN_C) {
+    tempLevel = 1;
+    logEvent("Temperatura alta en baterias: %.1f C", t);
+  } else if (tempLevel > 0 && t < TEMP_WARN_C - TEMP_HYST_C) {
+    tempLevel = 0;
+    logEvent("Temperatura normal: %.1f C", t);
+  }
+}
+
+// ---------------------------------------------------------------------
 //  Modo manual
 // ---------------------------------------------------------------------
 static void manualControl(uint32_t now) {
   if (now > manualUntil) { manualV = manualW = 0; lastMove = "stop"; }
-  float v = manualV;
+  float v = manualV, w = manualW;
   if (v > 0 && Sonar::distCm < SAFETY_STOP_CM) v = 0;   // anticolisión
-  Motors::arcade(v, manualW);
+  if (tempLevel == 2) { v *= 0.4f; w *= 0.4f; }          // en sobretemperatura solo maniobras lentas
+  Motors::arcade(v, w);
 }
 
 static void applyMove(const String& m, float speed, uint32_t ms, const char* src) {
@@ -275,7 +297,7 @@ static void processRemote() {
   lastRemoteMs = millis();
   uint8_t pressed = p.buttons & ~lastRemoteButtons;   // flancos de subida
   lastRemoteButtons = p.buttons;
-  if (pressed & 0x01) setMode(mode == MODE_AUTO ? MODE_MANUAL : MODE_AUTO);
+  if ((pressed & 0x01) && !(mode != MODE_AUTO && tempLevel == 2)) setMode(mode == MODE_AUTO ? MODE_MANUAL : MODE_AUTO);
   if (pressed & 0x02) { setMode(MODE_MANUAL); return; }
   if (mode != MODE_MANUAL) return;
   float k = (p.buttons & 0x04) ? 1.0f : 0.6f;
@@ -296,7 +318,7 @@ static void sendJson(int code, const String& body) {
 static void replyOk(const char* msg) { sendJson(200, String("{\"ok\":true,\"msg\":\"") + msg + "\"}"); }
 
 static void handleState() {
-  char buf[900];
+  char buf[1000];
   float err = Compass::wrap180(headingDes - Compass::heading);
   snprintf(buf, sizeof(buf),
     "{\"t\":%lu,\"mode\":\"%s\",\"nav\":\"%s\",\"state\":\"%s\","
@@ -305,7 +327,7 @@ static void handleState() {
     "\"dist_cm\":%.1f,\"obstacle\":%s,\"servo\":%d,\"obstacles_avoided\":%lu,"
     "\"color\":\"%s\",\"rgbc\":[%u,%u,%u,%u],\"color_changes\":%lu,\"color_ok\":%s,"
     "\"line\":[%d,%d,%d],\"pwm_l\":%.2f,\"pwm_r\":%.2f,\"auto_speed\":%.2f,"
-    "\"batt_v\":%.2f,\"rssi_clients\":%d,\"cmd_src\":\"%s\",\"last_move\":\"%s\","
+    "\"batt_v\":%.2f,\"temp_c\":%.1f,\"temp_ok\":%s,\"temp_alarm\":%d,\"rssi_clients\":%d,\"cmd_src\":\"%s\",\"last_move\":\"%s\","
     "\"event_id\":%lu,\"event\":\"%s\",\"uptime_s\":%lu}",
     (unsigned long)millis(), MODE_NAMES[mode], NAV_NAMES[nav], ST_NAMES[ast],
     Compass::heading, headingDes, err,
@@ -315,7 +337,8 @@ static void handleState() {
     ColorSensor::name(), ColorSensor::R, ColorSensor::G, ColorSensor::B, ColorSensor::C,
     (unsigned long)ColorSensor::changes, ColorSensor::ok ? "true" : "false",
     LineSensors::l, LineSensors::c, LineSensors::r, Motors::lastL, Motors::lastR, autoSpeed,
-    Battery::volts, WiFi.softAPgetStationNum(), cmdSource.c_str(), lastMove.c_str(),
+    Battery::volts, Thermistor::tempC, Thermistor::ok ? "true" : "false", tempLevel,
+    WiFi.softAPgetStationNum(), cmdSource.c_str(), lastMove.c_str(),
     (unsigned long)eventId, lastEvent, (unsigned long)(millis() / 1000));
   sendJson(200, buf);
 }
@@ -337,6 +360,7 @@ static void handleCmd() {
 static void handleMode() {
   String m = server.arg("m");
   if (server.hasArg("nav")) nav = (server.arg("nav") == "rumbo") ? NAV_RUMBO : NAV_LINEA;
+  if (m == "auto" && tempLevel == 2) { sendJson(409, "{\"ok\":false,\"msg\":\"sobretemperatura\"}"); return; }
   if (m == "auto") setMode(MODE_AUTO);
   else if (m == "manual") setMode(MODE_MANUAL);
   else if (m == "pausa" && mode == MODE_AUTO) setAutoState(ST_PAUSA);
@@ -418,6 +442,7 @@ void setup() {
   Sonar::begin();
   LineSensors::begin();
   analogSetPinAttenuation(PIN_VBAT, ADC_11db);
+  Thermistor::begin();
   setupNetwork();
   Compass::update();
   headingDes = Compass::heading;
@@ -439,11 +464,13 @@ void loop() {
   // En la sección negra la línea guía es blanca: se invierte la polaridad del TCRT5000
   LineSensors::update(ColorSensor::current == 0);
   Battery::update();
+  Thermistor::update();
   if (ast != ST_ESC_IZQ && ast != ST_ESC_DER) Sonar::update();   // durante el escaneo se mide aparte
   const char* prevColor = ColorSensor::name();
   if (ColorSensor::update()) logEvent("Cambio de seccion: %s -> %s", prevColor, ColorSensor::name());
 
   // 2) Decisión y actuación
+  thermalProtection();
   switch (mode) {
     case MODE_MANUAL: manualControl(now); break;
     case MODE_AUTO:   autoControl(now);   break;

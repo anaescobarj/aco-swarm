@@ -25,6 +25,12 @@ from urllib.parse import parse_qs, urlparse
 LOOP_DT = 0.05
 OBSTACLE_CM = 30.0
 SAFETY_STOP_CM = 12.0
+TEMP_AMBIENT = 25.0     # °C
+TEMP_WARN_C = 45.0      # mismos umbrales que config.h
+TEMP_CUTOFF_C = 55.0
+TEMP_HYST_C = 5.0
+TEMP_TAU = 300.0        # s, constante térmica del paquete de baterías
+TEMP_GAIN = 8.0         # °C de aumento en equilibrio por unidad de carga (|pwm_l|+|pwm_r|)
 AUTO_BASE_SPEED = 0.55
 TURN_SPEED = 0.50
 RODEO_W = 0.13
@@ -174,6 +180,8 @@ class SimRobot:
         self.event, self.event_id = "Simulador iniciado", 0
         self.distance_m = 0.0
         self.batt = 8.2
+        self.temp = TEMP_AMBIENT
+        self.temp_level = 0
         self.trail: list[tuple[float, float]] = []
         self.calib_since = 0.0
 
@@ -334,10 +342,27 @@ class SimRobot:
         if self.t > self.manual_until:
             self.manual_v = self.manual_w = 0.0
             self.last_move = "stop"
-        v = self.manual_v
+        v, w = self.manual_v, self.manual_w
         if v > 0 and self.dist < SAFETY_STOP_CM:
             v = 0.0
-        self.arcade(v, self.manual_w)
+        if self.temp_level == 2:          # en sobretemperatura solo maniobras lentas
+            v, w = v * 0.4, w * 0.4
+        self.arcade(v, w)
+
+    def thermal_protection(self) -> None:
+        t = self.temp
+        if self.temp_level < 2 and t >= TEMP_CUTOFF_C:
+            self.temp_level = 2
+            if self.mode != "MANUAL":
+                self.set_mode("MANUAL")
+            self.arcade(0, 0)
+            self.log(f"SOBRETEMPERATURA {t:.1f} C: motores detenidos")
+        elif self.temp_level == 0 and t >= TEMP_WARN_C:
+            self.temp_level = 1
+            self.log(f"Temperatura alta en baterias: {t:.1f} C")
+        elif self.temp_level > 0 and t < TEMP_WARN_C - TEMP_HYST_C:
+            self.temp_level = 0
+            self.log(f"Temperatura normal: {t:.1f} C")
 
     def step(self, dt: float = LOOP_DT) -> None:
         with self.lock:
@@ -364,6 +389,7 @@ class SimRobot:
                 self.log(f"Cambio de seccion: {self.color} -> {c}")
                 self.color, self.color_changes = c, self.color_changes + 1
             # decisión
+            self.thermal_protection()
             if self.mode == "MANUAL":
                 self.manual_control()
             elif self.mode == "AUTO":
@@ -381,6 +407,9 @@ class SimRobot:
             self.y += v * math.sin(self.theta) * dt
             self.distance_m += abs(v) * dt
             self.batt = max(6.6, self.batt - (abs(self.pwm_l) + abs(self.pwm_r)) * 2e-5)
+            # termistor NTC: modelo térmico de primer orden calentado por la corriente de motores
+            load = abs(self.pwm_l) + abs(self.pwm_r)
+            self.temp += (TEMP_AMBIENT + TEMP_GAIN * load - self.temp) * dt / TEMP_TAU
             hit = any(math.hypot(ox - self.x, oy - self.y) < r + 0.08 for ox, oy, r in self.world.obstacles)
             if hit and not self._colliding:
                 self.collisions += 1
@@ -403,7 +432,8 @@ class SimRobot:
                 "color": self.color, "rgbc": [r, g, b, c], "color_changes": self.color_changes,
                 "color_ok": True, "line": [int(v) for v in self.line],
                 "pwm_l": round(self.pwm_l, 2), "pwm_r": round(self.pwm_r, 2),
-                "auto_speed": self.auto_speed, "batt_v": round(self.batt, 2), "rssi_clients": 1,
+                "auto_speed": self.auto_speed, "batt_v": round(self.batt, 2), "temp_c": round(self.temp, 1), "temp_ok": True,
+                "temp_alarm": self.temp_level, "rssi_clients": 1,
                 "cmd_src": self.cmd_src, "last_move": self.last_move,
                 "event_id": self.event_id, "event": self.event, "uptime_s": int(self.t),
                 "sim": {"x": round(self.x, 3), "y": round(self.y, 3), "level": self.world.level,
@@ -446,6 +476,8 @@ class SimRobot:
                 m = arg("m")
                 if arg("nav"):
                     self.nav = "rumbo" if arg("nav") == "rumbo" else "linea"
+                if m == "auto" and self.temp_level == 2:
+                    return 409, {"ok": False, "msg": "sobretemperatura"}
                 if m == "auto":
                     self.set_mode("AUTO")
                 elif m == "manual":
@@ -457,6 +489,9 @@ class SimRobot:
                 elif not arg("nav"):
                     return 400, {"ok": False, "msg": "modo invalido"}
                 return 200, {"ok": True, "msg": self.mode}
+            if path == "/api/sim/temp":      # solo simulador: forzar temperatura para probar la alarma
+                self.temp = float(arg("c", TEMP_AMBIENT))
+                return 200, {"ok": True, "msg": f"temp {self.temp:.1f}"}
             if path == "/api/heading":
                 if arg("deg") is not None:
                     self.heading_des = wrap360(float(arg("deg")))
